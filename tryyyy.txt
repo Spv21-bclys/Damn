@@ -1,0 +1,92 @@
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
+
+public class GenerateTokenWithProxy {
+
+    public static void main(String[] args) {
+        String url = "https://api.example.com/token"; // Replace with your token endpoint
+        String proxyHost = "amald";
+        int proxyPort = 8080;
+        String proxyUser = "name";
+        String proxyPass = "passcode";
+
+        // Prepare form fields
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("grant_type", "password");
+        parameters.put("username", "your_username");
+        parameters.put("password", "your_password");
+        parameters.put("client_id", "your_client_id");
+        parameters.put("client_secret", "your_client_secret");
+        parameters.put("scope", "your_scope");
+
+        try {
+            // Create URL object
+            URL obj = new URL(url);
+
+            // Set up the proxy
+            Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
+
+            // Open a connection with the proxy
+            HttpURLConnection con = (HttpURLConnection) obj.openConnection(proxy);
+
+            // Set request method
+            con.setRequestMethod("POST");
+
+            // Set headers
+            con.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+            con.setRequestProperty("Accept", "application/json");
+
+            // Set proxy authentication
+            String encoded = Base64.getEncoder().encodeToString((proxyUser + ":" + proxyPass).getBytes(StandardCharsets.UTF_8));
+            con.setRequestProperty("Proxy-Authorization", "Basic " + encoded);
+
+            // Enable input/output streams
+            con.setDoOutput(true);
+
+            // Prepare form data
+            StringBuilder postData = new StringBuilder();
+            for (Map.Entry<String, String> param : parameters.entrySet()) {
+                if (postData.length() != 0) postData.append('&');
+                postData.append(URLEncoder.encode(param.getKey(), "UTF-8"));
+                postData.append('=');
+                postData.append(URLEncoder.encode(param.getValue(), "UTF-8"));
+            }
+            byte[] postDataBytes = postData.toString().getBytes(StandardCharsets.UTF_8);
+
+            // Send request
+            try (OutputStream os = con.getOutputStream()) {
+                os.write(postDataBytes);
+                os.flush();
+            }
+
+            // Get response code
+            int responseCode = con.getResponseCode();
+            System.out.println("Response Code: " + responseCode);
+
+            // Read the response
+            StringBuilder response = new StringBuilder();
+            try (BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()))) {
+                String inputLine;
+                while ((inputLine = in.readLine()) != null) {
+                    response.append(inputLine);
+                }
+            }
+
+            // Print the response
+            System.out.println("Response: " + response.toString());
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
