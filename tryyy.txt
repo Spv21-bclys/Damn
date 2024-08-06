@@ -1,0 +1,97 @@
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.Authenticator;
+import java.net.PasswordAuthentication;
+import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.URL;
+
+public class TokenGenerator {
+
+    public static void main(String[] args) {
+        String username = "your_username";
+        String password = "your_password";
+        String clientId = "your_client_id";
+        String clientSecret = "your_client_secret";
+        String grantType = "your_grant_type";
+        String tokenUrl = "https://your-auth-server.com/oauth/token";
+
+        // Proxy settings
+        String proxyHost = "your_proxy_host";
+        int proxyPort = 8080; // Your proxy port
+        String proxyUser = "your_proxy_username";
+        String proxyPassword = "your_proxy_password_with_special_chars"; // e.g., "pass@word123"
+
+        // Set up the proxy and authenticator
+        setupProxyAuthenticator(proxyUser, proxyPassword);
+
+        // Generate the token
+        String token = generateToken(username, password, clientId, clientSecret, grantType, tokenUrl, proxyHost, proxyPort);
+        System.out.println("Generated Token: " + token);
+    }
+
+    private static void setupProxyAuthenticator(final String proxyUser, final String proxyPassword) {
+        Authenticator.setDefault(new Authenticator() {
+            @Override
+            protected PasswordAuthentication getPasswordAuthentication() {
+                return new PasswordAuthentication(proxyUser, proxyPassword.toCharArray());
+            }
+        });
+    }
+
+    public static String generateToken(String username, String password, String clientId, String clientSecret, 
+                                       String grantType, String tokenUrl, String proxyHost, int proxyPort) {
+        HttpURLConnection connection = null;
+        BufferedReader reader = null;
+        try {
+            URL url = new URL(tokenUrl);
+
+            // Set up proxy
+            Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
+            connection = (HttpURLConnection) url.openConnection(proxy);
+
+            // Set request method and headers
+            connection.setRequestMethod("POST");
+            connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+            connection.setDoOutput(true);
+
+            // Prepare the request payload
+            String payload = String.format("username=%s&password=%s&client_id=%s&client_secret=%s&grant_type=%s",
+                                            username, password, clientId, clientSecret, grantType);
+
+            // Send the request
+            try (OutputStream os = connection.getOutputStream()) {
+                os.write(payload.getBytes());
+                os.flush();
+            }
+
+            // Read the response
+            reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                response.append(line);
+            }
+
+            // Handle the response (Assuming token is in the response body)
+            return response.toString();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+}
