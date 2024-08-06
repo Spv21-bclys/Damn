@@ -1,0 +1,53 @@
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.http.HttpRequest.BodyPublishers;
+import java.net.http.HttpResponse.BodyHandlers;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+public class TokenGenerator {
+
+    private static final String TOKEN_URL = "https://example.com/idcs/token";
+    private static final String CLIENT_ID = "your_client_id";
+    private static final String CLIENT_SECRET = "your_client_secret";
+    private static final String USERNAME = "your_username";
+    private static final String PASSWORD = "your_password";
+    private static final String GRANT_TYPE = "password";
+
+    public static void main(String[] args) {
+        try {
+            String token = generateToken();
+            System.out.println("Access Token: " + token);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static String generateToken() throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+
+        String requestBody = "grant_type=" + GRANT_TYPE
+                           + "&client_id=" + CLIENT_ID
+                           + "&client_secret=" + CLIENT_SECRET
+                           + "&username=" + USERNAME
+                           + "&password=" + PASSWORD;
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI(TOKEN_URL))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(BodyPublishers.ofString(requestBody))
+                .build();
+
+        HttpResponse<String> response = client.send(request, BodyHandlers.ofString());
+
+        if (response.statusCode() == 200) {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode node = mapper.readTree(response.body());
+            return node.get("access_token").asText();
+        } else {
+            throw new RuntimeException("Failed to get access token: " + response.body());
+        }
+    }
+}
