@@ -1,0 +1,35 @@
+String jsonInputString = "{\n" +
+    "  \"pncsLevelSummary\": {\n" +
+    "    \"request\": {\n" +
+    "      \"debitAccNum\": \"5012948231\",\n" +
+    "      \"debitAccNumType\": \"CMACCNBR\",\n" +
+    "      \"branch\": \"FR\",\n" +
+    "      \"reportType\": \"NONSDC\",\n" +
+    "      \"isBilled\": true,\n" +
+    "      \"cancelCompleteBillReq\": \"Both\",\n" +
+    "      \"pncsRefNum\": \"\",\n" +
+    "      \"fromDate\": \"2022-08-30\",\n" +
+    "      \"toDate\": \"2024-08-30\",\n" +
+    "      \"paginationRequired\": \"Y\",\n" +
+    "      \"fromRecord\": 1,\n" +
+    "      \"toRecord\": 4,\n" +
+    "      \"sortingRequired\": \"Y\",\n" +
+    "      \"sort\": [\n" +
+    "        {\n" +
+    "          \"seq\": 1,\n" +
+    "          \"columnName\": \"debitAccAmt\",\n" +
+    "          \"sortBy\": \"desc\",\n" +
+    "          \"columnType\": \"FIELD\",\n" +
+    "          \"entity\": null\n" +
+    "        },\n" +
+    "        {\n" +
+    "          \"seq\": 2,\n" +
+    "          \"columnName\": \"billingCycle\",\n" +
+    "          \"sortBy\": \"asc\",\n" +
+    "          \"columnType\": \"FIELD\",\n" +
+    "          \"entity\": null\n" +
+    "        }\n" +
+    "      ]\n" +
+    "    }\n" +
+    "  }\n" +
+    "}";
