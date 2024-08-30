@@ -1,0 +1,18 @@
+# src/main/resources/config.properties
+
+# API URL
+api.url=https://api.example.com/token
+
+# Proxy settings
+proxy.host=amald
+proxy.port=8080
+proxy.user=name
+proxy.pass=passcode@withSpecial#Chars
+
+# API credentials
+grant_type=password
+username=your_username
+password=your_password
+client_id=your_client_id
+client_secret=your_client_secret
+scope=your_scope
