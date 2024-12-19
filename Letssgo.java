@@ -7,18 +7,19 @@ import java.util.*;
 public class ExcelValidator {
     public static void main(String[] args) {
         String ruleFilePath = "path_to_rule_book.xlsx";
-        String inputFilePath = "path_to_input_excel.xlsx";
-        String outputFilePath = "output_excel.xlsx";
+        String inputFilePath = "path_to_excel_b.xlsx";
+        String outputFilePath = "output_excel_b.xlsx";
 
         try {
             Map<String, List<Map<String, String>>> rules = readRules(ruleFilePath);
-            validateAndGenerateOutput(inputFilePath, outputFilePath, rules);
+            validateAndUpdateExcelB(inputFilePath, outputFilePath, rules);
             System.out.println("Validation completed. Results saved to: " + outputFilePath);
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
+    // Read Rule Book and store as Map<String, List<Map<String, String>>>
     private static Map<String, List<Map<String, String>>> readRules(String filePath) throws IOException {
         Map<String, List<Map<String, String>>> rules = new HashMap<>();
 
@@ -52,94 +53,100 @@ public class ExcelValidator {
         return rules;
     }
 
-    private static void validateAndGenerateOutput(String inputFilePath, String outputFilePath,
-                                                  Map<String, List<Map<String, String>>> rules) throws IOException {
+    // Validate Excel B and update with results
+    private static void validateAndUpdateExcelB(String inputFilePath, String outputFilePath,
+                                                Map<String, List<Map<String, String>>> rules) throws IOException {
         try (FileInputStream fis = new FileInputStream(inputFilePath);
-             Workbook workbook = new XSSFWorkbook(fis);
-             Workbook outputWorkbook = new XSSFWorkbook()) {
+             Workbook workbook = new XSSFWorkbook(fis)) {
 
-            Sheet inputSheet = workbook.getSheetAt(0);
-            Sheet outputSheet = outputWorkbook.createSheet("Validated Output");
+            Sheet sheet = workbook.getSheetAt(0);
+            Row headerRow = sheet.getRow(0);
+            int validationColIndex = headerRow.getLastCellNum();
+            int ruleColIndex = validationColIndex + 1;
 
-            // Copy header
-            Row headerRow = inputSheet.getRow(0);
-            Row outputHeaderRow = outputSheet.createRow(0);
-            for (int i = 0; i < headerRow.getLastCellNum(); i++) {
-                outputHeaderRow.createCell(i).setCellValue(headerRow.getCell(i).getStringCellValue());
-            }
+            // Add "Validation Result" and "Matched Rule" columns
+            headerRow.createCell(validationColIndex).setCellValue("Validation Result");
+            headerRow.createCell(ruleColIndex).setCellValue("Matched Rule");
 
-            int outputRowNum = 1;
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
 
-            for (int i = 1; i <= inputSheet.getLastRowNum(); i++) {
-                Row inputRow = inputSheet.getRow(i);
-                if (inputRow == null) continue;
-
-                String billingCode = getCellValue(inputRow.getCell(findColumnIndex(headerRow, "BIILING_CODE")));
+                String billingCode = getCellValue(row.getCell(findColumnIndex(headerRow, "BIILING_CODE")));
                 List<Map<String, String>> ruleSets = rules.getOrDefault(billingCode, new ArrayList<>());
 
-                boolean ruleMatched = false;
+                // Validate row and get result
+                ValidationResult result = validateRowAgainstRules(row, headerRow, ruleSets);
 
-                for (Map<String, String> ruleSet : ruleSets) {
-                    boolean isValid = validateRowAgainstRule(inputRow, headerRow, ruleSet);
-                    if (isValid) {
-                        appendRowToSheet(outputSheet, inputRow, outputRowNum++);
-                        ruleMatched = true;
-                        break; // Only one rule match should be appended
-                    }
-                }
-
-                if (!ruleMatched && !ruleSets.isEmpty()) {
-                    // If no rules match, append the first rule arbitrarily
-                    appendRowToSheet(outputSheet, inputRow, outputRowNum++);
-                }
+                row.createCell(validationColIndex).setCellValue(result.isValid ? "Correct" : "Wrong");
+                row.createCell(ruleColIndex).setCellValue(result.matchedRule);
             }
 
             // Save the updated Excel file
             try (FileOutputStream fos = new FileOutputStream(outputFilePath)) {
-                outputWorkbook.write(fos);
+                workbook.write(fos);
             }
         }
     }
 
-    private static boolean validateRowAgainstRule(Row row, Row headerRow, Map<String, String> ruleSet) {
-        for (Map.Entry<String, String> rule : ruleSet.entrySet()) {
-            String columnName = rule.getKey();
-            String expectedValue = rule.getValue();
-            int colIndex = findColumnIndex(headerRow, columnName);
-            String actualValue = getCellValue(row.getCell(colIndex));
+    // Validation result structure
+    private static class ValidationResult {
+        boolean isValid;
+        String matchedRule;
 
-            if (!validateCellValue(expectedValue, actualValue)) {
-                return false;
-            }
+        ValidationResult(boolean isValid, String matchedRule) {
+            this.isValid = isValid;
+            this.matchedRule = matchedRule;
         }
-        return true;
     }
 
+    // Validate a single row against multiple rule sets
+    private static ValidationResult validateRowAgainstRules(Row row, Row headerRow, List<Map<String, String>> ruleSets) {
+        StringBuilder lastRuleCompared = new StringBuilder();
+
+        for (Map<String, String> ruleSet : ruleSets) {
+            boolean isMatch = true;
+            StringBuilder ruleString = new StringBuilder();
+
+            for (Map.Entry<String, String> rule : ruleSet.entrySet()) {
+                String columnName = rule.getKey();
+                String expectedValue = rule.getValue();
+                int colIndex = findColumnIndex(headerRow, columnName);
+                String actualValue = getCellValue(row.getCell(colIndex));
+
+                if (!validateCellValue(expectedValue, actualValue)) {
+                    isMatch = false;
+                    break;
+                }
+                ruleString.append(columnName).append("=").append(expectedValue).append(", ");
+            }
+
+            lastRuleCompared = new StringBuilder(ruleString.toString().replaceAll(", $", ""));
+
+            if (isMatch) {
+                return new ValidationResult(true, lastRuleCompared.toString());
+            }
+        }
+
+        // If no rule matches, return the last rule compared
+        return new ValidationResult(false, lastRuleCompared.toString());
+    }
+
+    // Validate cell value based on rule
     private static boolean validateCellValue(String expectedValue, String actualValue) {
-        if (expectedValue.equalsIgnoreCase("Not Used")) return true;
-        if (expectedValue.startsWith("<>")) {
-            String[] excludedValues = expectedValue.substring(2).split(",");
+        if (expectedValue.equalsIgnoreCase("Not Used")) return true; // Any value is valid
+        if (expectedValue.startsWith("<>")) { // Exclusion rule
+            String[] excludedValues = expectedValue.substring(3, expectedValue.length() - 1).split(",");
             return Arrays.stream(excludedValues).noneMatch(val -> val.trim().equalsIgnoreCase(actualValue));
         }
-        if (expectedValue.contains(",")) {
+        if (expectedValue.contains(",")) { // Multiple values allowed
             String[] allowedValues = expectedValue.split(",");
             return Arrays.stream(allowedValues).anyMatch(val -> val.trim().equalsIgnoreCase(actualValue));
         }
-        return expectedValue.equalsIgnoreCase(actualValue);
+        return expectedValue.equalsIgnoreCase(actualValue); // Exact match
     }
 
-    private static void appendRowToSheet(Sheet sheet, Row inputRow, int outputRowNum) {
-        Row outputRow = sheet.createRow(outputRowNum);
-        for (int i = 0; i < inputRow.getLastCellNum(); i++) {
-            Cell inputCell = inputRow.getCell(i);
-            Cell outputCell = outputRow.createCell(i);
-
-            if (inputCell != null) {
-                outputCell.setCellValue(getCellValue(inputCell));
-            }
-        }
-    }
-
+    // Helper method to get cell value as String
     private static String getCellValue(Cell cell) {
         if (cell == null) return "";
         switch (cell.getCellType()) {
@@ -149,6 +156,7 @@ public class ExcelValidator {
         }
     }
 
+    // Find column index by column name
     private static int findColumnIndex(Row headerRow, String columnName) {
         for (Cell cell : headerRow) {
             if (cell.getStringCellValue().equalsIgnoreCase(columnName)) {
