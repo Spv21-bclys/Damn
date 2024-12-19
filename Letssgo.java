@@ -12,7 +12,7 @@ public class ExcelValidator {
 
         try {
             Map<String, List<Map<String, String>>> rules = readRules(ruleFilePath);
-            validateAndUpdateExcel(inputFilePath, outputFilePath, rules);
+            validateAndGenerateOutput(inputFilePath, outputFilePath, rules);
             System.out.println("Validation completed. Results saved to: " + outputFilePath);
         } catch (Exception e) {
             e.printStackTrace();
@@ -52,76 +52,73 @@ public class ExcelValidator {
         return rules;
     }
 
-    private static void validateAndUpdateExcel(String inputFilePath, String outputFilePath,
-                                               Map<String, List<Map<String, String>>> rules) throws IOException {
+    private static void validateAndGenerateOutput(String inputFilePath, String outputFilePath,
+                                                  Map<String, List<Map<String, String>>> rules) throws IOException {
         try (FileInputStream fis = new FileInputStream(inputFilePath);
-             Workbook workbook = new XSSFWorkbook(fis)) {
+             Workbook workbook = new XSSFWorkbook(fis);
+             Workbook outputWorkbook = new XSSFWorkbook()) {
 
-            Sheet sheet = workbook.getSheetAt(0);
-            Row headerRow = sheet.getRow(0);
-            CellStyle redStyle = createRedCellStyle(workbook); // Reuse this style
+            Sheet inputSheet = workbook.getSheetAt(0);
+            Sheet outputSheet = outputWorkbook.createSheet("Validated Output");
 
-            // Process each row
-            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
-                Row row = sheet.getRow(i);
-                if (row == null) continue;
+            // Copy header
+            Row headerRow = inputSheet.getRow(0);
+            Row outputHeaderRow = outputSheet.createRow(0);
+            for (int i = 0; i < headerRow.getLastCellNum(); i++) {
+                outputHeaderRow.createCell(i).setCellValue(headerRow.getCell(i).getStringCellValue());
+            }
 
-                String billingCode = getCellValue(row.getCell(findColumnIndex(headerRow, "BIILING_CODE")));
+            int outputRowNum = 1;
+
+            for (int i = 1; i <= inputSheet.getLastRowNum(); i++) {
+                Row inputRow = inputSheet.getRow(i);
+                if (inputRow == null) continue;
+
+                String billingCode = getCellValue(inputRow.getCell(findColumnIndex(headerRow, "BIILING_CODE")));
                 List<Map<String, String>> ruleSets = rules.getOrDefault(billingCode, new ArrayList<>());
 
-                boolean isMatched = false;
-                Map<String, String> matchedRule = null;
+                boolean ruleMatched = false;
 
                 for (Map<String, String> ruleSet : ruleSets) {
-                    boolean isValid = validateRowAgainstRule(row, headerRow, ruleSet, redStyle);
+                    boolean isValid = validateRowAgainstRule(inputRow, headerRow, ruleSet);
                     if (isValid) {
-                        matchedRule = ruleSet;
-                        isMatched = true;
-                        break;
+                        appendRowToSheet(outputSheet, inputRow, outputRowNum++);
+                        ruleMatched = true;
+                        break; // Only one rule match should be appended
                     }
                 }
 
-                if (!isMatched && !ruleSets.isEmpty()) {
-                    matchedRule = ruleSets.get(0); // Use the first rule as fallback
-                }
-
-                // Append only if there is a valid rule to add
-                if (matchedRule != null) {
-                    appendRuleToSheet(sheet, matchedRule);
+                if (!ruleMatched && !ruleSets.isEmpty()) {
+                    // If no rules match, append the first rule arbitrarily
+                    appendRowToSheet(outputSheet, inputRow, outputRowNum++);
                 }
             }
 
             // Save the updated Excel file
             try (FileOutputStream fos = new FileOutputStream(outputFilePath)) {
-                workbook.write(fos);
+                outputWorkbook.write(fos);
             }
         }
     }
 
-    private static boolean validateRowAgainstRule(Row row, Row headerRow, Map<String, String> ruleSet, CellStyle redStyle) {
-        boolean isMatch = true;
-
+    private static boolean validateRowAgainstRule(Row row, Row headerRow, Map<String, String> ruleSet) {
         for (Map.Entry<String, String> rule : ruleSet.entrySet()) {
             String columnName = rule.getKey();
             String expectedValue = rule.getValue();
             int colIndex = findColumnIndex(headerRow, columnName);
-            Cell cell = row.getCell(colIndex);
+            String actualValue = getCellValue(row.getCell(colIndex));
 
-            String actualValue = getCellValue(cell);
             if (!validateCellValue(expectedValue, actualValue)) {
-                isMatch = false;
-                if (cell != null) {
-                    cell.setCellStyle(redStyle); // Highlight mismatched cells
-                }
+                return false;
             }
         }
-        return isMatch;
+        return true;
     }
 
     private static boolean validateCellValue(String expectedValue, String actualValue) {
         if (expectedValue.equalsIgnoreCase("Not Used")) return true;
         if (expectedValue.startsWith("<>")) {
-            String[] excludedValues = expectedValue.substring(3, expectedValue.length() - 1).split(",");
+            String[] excludedValues = expectedValue.substring(2).split(",");
             return Arrays.stream(excludedValues).noneMatch(val -> val.trim().equalsIgnoreCase(actualValue));
         }
         if (expectedValue.contains(",")) {
@@ -131,21 +128,16 @@ public class ExcelValidator {
         return expectedValue.equalsIgnoreCase(actualValue);
     }
 
-    private static void appendRuleToSheet(Sheet sheet, Map<String, String> ruleSet) {
-        Row newRow = sheet.createRow(sheet.getLastRowNum() + 1);
-        int colIndex = 0;
-        for (String value : ruleSet.values()) {
-            Cell cell = newRow.createCell(colIndex++);
-            cell.setCellValue(value);
-        }
-    }
+    private static void appendRowToSheet(Sheet sheet, Row inputRow, int outputRowNum) {
+        Row outputRow = sheet.createRow(outputRowNum);
+        for (int i = 0; i < inputRow.getLastCellNum(); i++) {
+            Cell inputCell = inputRow.getCell(i);
+            Cell outputCell = outputRow.createCell(i);
 
-    private static CellStyle createRedCellStyle(Workbook workbook) {
-        CellStyle style = workbook.createCellStyle();
-        Font font = workbook.createFont();
-        font.setColor(IndexedColors.RED.getIndex());
-        style.setFont(font);
-        return style;
+            if (inputCell != null) {
+                outputCell.setCellValue(getCellValue(inputCell));
+            }
+        }
     }
 
     private static String getCellValue(Cell cell) {
