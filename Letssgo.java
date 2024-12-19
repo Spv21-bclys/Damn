@@ -61,6 +61,7 @@ public class ExcelValidator {
             Row headerRow = sheet.getRow(0);
             CellStyle redStyle = createRedCellStyle(workbook); // Reuse this style
 
+            // Process each row
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
                 if (row == null) continue;
@@ -69,20 +70,28 @@ public class ExcelValidator {
                 List<Map<String, String>> ruleSets = rules.getOrDefault(billingCode, new ArrayList<>());
 
                 boolean isMatched = false;
+                Map<String, String> matchedRule = null;
+
                 for (Map<String, String> ruleSet : ruleSets) {
                     boolean isValid = validateRowAgainstRule(row, headerRow, ruleSet, redStyle);
                     if (isValid) {
-                        appendRuleToSheet(sheet, ruleSet);
+                        matchedRule = ruleSet;
                         isMatched = true;
                         break;
                     }
                 }
 
                 if (!isMatched && !ruleSets.isEmpty()) {
-                    appendRuleToSheet(sheet, ruleSets.get(0)); // Add one arbitrary rule
+                    matchedRule = ruleSets.get(0); // Use the first rule as fallback
+                }
+
+                // Append only if there is a valid rule to add
+                if (matchedRule != null) {
+                    appendRuleToSheet(sheet, matchedRule);
                 }
             }
 
+            // Save the updated Excel file
             try (FileOutputStream fos = new FileOutputStream(outputFilePath)) {
                 workbook.write(fos);
             }
@@ -102,7 +111,7 @@ public class ExcelValidator {
             if (!validateCellValue(expectedValue, actualValue)) {
                 isMatch = false;
                 if (cell != null) {
-                    cell.setCellStyle(redStyle); // Reuse the red style
+                    cell.setCellStyle(redStyle); // Highlight mismatched cells
                 }
             }
         }
