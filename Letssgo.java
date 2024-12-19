@@ -19,7 +19,6 @@ public class ExcelValidator {
         }
     }
 
-    // Read Rule Book and store as Map<String, List<Map<String, String>>>
     private static Map<String, List<Map<String, String>>> readRules(String filePath) throws IOException {
         Map<String, List<Map<String, String>>> rules = new HashMap<>();
 
@@ -53,7 +52,6 @@ public class ExcelValidator {
         return rules;
     }
 
-    // Validate Excel and update with results
     private static void validateAndUpdateExcel(String inputFilePath, String outputFilePath,
                                                Map<String, List<Map<String, String>>> rules) throws IOException {
         try (FileInputStream fis = new FileInputStream(inputFilePath);
@@ -61,6 +59,7 @@ public class ExcelValidator {
 
             Sheet sheet = workbook.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
+            CellStyle redStyle = createRedCellStyle(workbook); // Reuse this style
 
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
@@ -71,7 +70,7 @@ public class ExcelValidator {
 
                 boolean isMatched = false;
                 for (Map<String, String> ruleSet : ruleSets) {
-                    boolean isValid = validateRowAgainstRule(row, headerRow, ruleSet, workbook);
+                    boolean isValid = validateRowAgainstRule(row, headerRow, ruleSet, redStyle);
                     if (isValid) {
                         appendRuleToSheet(sheet, ruleSet);
                         isMatched = true;
@@ -84,17 +83,14 @@ public class ExcelValidator {
                 }
             }
 
-            // Save the updated Excel file
             try (FileOutputStream fos = new FileOutputStream(outputFilePath)) {
                 workbook.write(fos);
             }
         }
     }
 
-    // Validate a single row against a single rule and highlight mismatches
-    private static boolean validateRowAgainstRule(Row row, Row headerRow, Map<String, String> ruleSet, Workbook workbook) {
+    private static boolean validateRowAgainstRule(Row row, Row headerRow, Map<String, String> ruleSet, CellStyle redStyle) {
         boolean isMatch = true;
-        CellStyle redStyle = createRedCellStyle(workbook);
 
         for (Map.Entry<String, String> rule : ruleSet.entrySet()) {
             String columnName = rule.getKey();
@@ -106,28 +102,26 @@ public class ExcelValidator {
             if (!validateCellValue(expectedValue, actualValue)) {
                 isMatch = false;
                 if (cell != null) {
-                    cell.setCellStyle(redStyle);
+                    cell.setCellStyle(redStyle); // Reuse the red style
                 }
             }
         }
         return isMatch;
     }
 
-    // Validate cell value based on rule
     private static boolean validateCellValue(String expectedValue, String actualValue) {
-        if (expectedValue.equalsIgnoreCase("Not Used")) return true; // Any value is valid
-        if (expectedValue.startsWith("<>")) { // Exclusion rule
+        if (expectedValue.equalsIgnoreCase("Not Used")) return true;
+        if (expectedValue.startsWith("<>")) {
             String[] excludedValues = expectedValue.substring(3, expectedValue.length() - 1).split(",");
             return Arrays.stream(excludedValues).noneMatch(val -> val.trim().equalsIgnoreCase(actualValue));
         }
-        if (expectedValue.contains(",")) { // Multiple values allowed
+        if (expectedValue.contains(",")) {
             String[] allowedValues = expectedValue.split(",");
             return Arrays.stream(allowedValues).anyMatch(val -> val.trim().equalsIgnoreCase(actualValue));
         }
-        return expectedValue.equalsIgnoreCase(actualValue); // Exact match
+        return expectedValue.equalsIgnoreCase(actualValue);
     }
 
-    // Append a rule to the sheet as a new row
     private static void appendRuleToSheet(Sheet sheet, Map<String, String> ruleSet) {
         Row newRow = sheet.createRow(sheet.getLastRowNum() + 1);
         int colIndex = 0;
@@ -137,7 +131,6 @@ public class ExcelValidator {
         }
     }
 
-    // Create a red cell style
     private static CellStyle createRedCellStyle(Workbook workbook) {
         CellStyle style = workbook.createCellStyle();
         Font font = workbook.createFont();
@@ -146,7 +139,6 @@ public class ExcelValidator {
         return style;
     }
 
-    // Helper method to get cell value as String
     private static String getCellValue(Cell cell) {
         if (cell == null) return "";
         switch (cell.getCellType()) {
@@ -156,7 +148,6 @@ public class ExcelValidator {
         }
     }
 
-    // Find column index by column name
     private static int findColumnIndex(Row headerRow, String columnName) {
         for (Cell cell : headerRow) {
             if (cell.getStringCellValue().equalsIgnoreCase(columnName)) {
