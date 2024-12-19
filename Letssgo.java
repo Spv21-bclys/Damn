@@ -61,14 +61,9 @@ public class ExcelValidator {
 
             Sheet sheet = workbook.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
-            int validationColIndex = headerRow.getLastCellNum();
-            int ruleColIndex = validationColIndex + 1;
+            int originalLastRowNum = sheet.getLastRowNum();
 
-            // Add "Validation Result" and "Matched Rule" columns
-            headerRow.createCell(validationColIndex).setCellValue("Validation Result");
-            headerRow.createCell(ruleColIndex).setCellValue("Matched Rule");
-
-            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+            for (int i = 1; i <= originalLastRowNum; i++) {
                 Row row = sheet.getRow(i);
                 if (row == null) continue;
 
@@ -78,8 +73,11 @@ public class ExcelValidator {
                 // Validate row and get result
                 ValidationResult result = validateRowAgainstRules(row, headerRow, ruleSets);
 
-                row.createCell(validationColIndex).setCellValue(result.isValid ? "Correct" : "Wrong");
-                row.createCell(ruleColIndex).setCellValue(result.matchedRule);
+                if (result.isValid) {
+                    addRuleAsRow(sheet, headerRow, result.matchedRule);
+                } else {
+                    addRuleAsRow(sheet, headerRow, result.matchedRule);
+                }
             }
 
             // Save the updated Excel file
@@ -89,12 +87,24 @@ public class ExcelValidator {
         }
     }
 
+    // Add a rule as a new row in the sheet
+    private static void addRuleAsRow(Sheet sheet, Row headerRow, Map<String, String> ruleSet) {
+        int newRowNum = sheet.getLastRowNum() + 1;
+        Row newRow = sheet.createRow(newRowNum);
+
+        for (Map.Entry<String, String> rule : ruleSet.entrySet()) {
+            int colIndex = findColumnIndex(headerRow, rule.getKey());
+            Cell cell = newRow.createCell(colIndex);
+            cell.setCellValue(rule.getValue());
+        }
+    }
+
     // Validation result structure
     private static class ValidationResult {
         boolean isValid;
-        String matchedRule;
+        Map<String, String> matchedRule;
 
-        ValidationResult(boolean isValid, String matchedRule) {
+        ValidationResult(boolean isValid, Map<String, String> matchedRule) {
             this.isValid = isValid;
             this.matchedRule = matchedRule;
         }
@@ -102,11 +112,10 @@ public class ExcelValidator {
 
     // Validate a single row against multiple rule sets
     private static ValidationResult validateRowAgainstRules(Row row, Row headerRow, List<Map<String, String>> ruleSets) {
-        StringBuilder lastRuleCompared = new StringBuilder();
+        Map<String, String> lastRuleCompared = null;
 
         for (Map<String, String> ruleSet : ruleSets) {
             boolean isMatch = true;
-            StringBuilder ruleString = new StringBuilder();
 
             for (Map.Entry<String, String> rule : ruleSet.entrySet()) {
                 String columnName = rule.getKey();
@@ -118,18 +127,17 @@ public class ExcelValidator {
                     isMatch = false;
                     break;
                 }
-                ruleString.append(columnName).append("=").append(expectedValue).append(", ");
             }
 
-            lastRuleCompared = new StringBuilder(ruleString.toString().replaceAll(", $", ""));
+            lastRuleCompared = ruleSet;
 
             if (isMatch) {
-                return new ValidationResult(true, lastRuleCompared.toString());
+                return new ValidationResult(true, ruleSet);
             }
         }
 
         // If no rule matches, return the last rule compared
-        return new ValidationResult(false, lastRuleCompared.toString());
+        return new ValidationResult(false, lastRuleCompared);
     }
 
     // Validate cell value based on rule
