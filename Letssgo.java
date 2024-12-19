@@ -63,7 +63,7 @@ public class ExcelValidator {
             Sheet inputSheet = inputWorkbook.getSheetAt(0);
             Sheet outputSheet = outputWorkbook.createSheet("Validation Results");
 
-            // Copy header row to the output file
+            // Copy header row to the output file and add "Validation Result" column
             Row inputHeaderRow = inputSheet.getRow(0);
             Row outputHeaderRow = outputSheet.createRow(0);
             for (int i = 0; i < inputHeaderRow.getLastCellNum(); i++) {
@@ -73,6 +73,7 @@ public class ExcelValidator {
                     outputCell.setCellValue(inputCell.getStringCellValue());
                 }
             }
+            outputHeaderRow.createCell(inputHeaderRow.getLastCellNum()).setCellValue("Validation Result");
 
             // Process each row
             int outputRowIndex = 1;
@@ -86,14 +87,16 @@ public class ExcelValidator {
                 // Validate row and add to output
                 ValidationResult result = validateRowAgainstRules(inputRow, inputHeaderRow, ruleSets);
 
-                // Add the original input row to the output file
+                // Add the original input row to the output file with validation result
                 Row outputRow = outputSheet.createRow(outputRowIndex++);
                 copyRow(inputRow, outputRow);
+                outputRow.createCell(inputHeaderRow.getLastCellNum()).setCellValue(result.isValid ? "Correct" : "Wrong");
 
                 // Add the matched rule row if available
                 if (result.matchedRuleRow != null) {
                     Row ruleRow = outputSheet.createRow(outputRowIndex++);
                     populateRuleRow(ruleRow, inputHeaderRow, result.matchedRuleRow);
+                    ruleRow.createCell(inputHeaderRow.getLastCellNum()).setCellValue(result.isValid ? "Correct" : "Wrong");
                 }
             }
 
