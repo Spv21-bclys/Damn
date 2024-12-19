@@ -57,63 +57,66 @@ public class ExcelValidator {
     private static void validateAndUpdateExcelB(String inputFilePath, String outputFilePath,
                                                 Map<String, List<Map<String, String>>> rules) throws IOException {
         try (FileInputStream fis = new FileInputStream(inputFilePath);
-             Workbook workbook = new XSSFWorkbook(fis)) {
+             Workbook inputWorkbook = new XSSFWorkbook(fis);
+             Workbook outputWorkbook = new XSSFWorkbook()) {
 
-            Sheet sheet = workbook.getSheetAt(0);
-            Row headerRow = sheet.getRow(0);
-            int originalLastRowNum = sheet.getLastRowNum();
+            Sheet inputSheet = inputWorkbook.getSheetAt(0);
+            Sheet outputSheet = outputWorkbook.createSheet("Validation Results");
 
-            for (int i = 1; i <= originalLastRowNum; i++) {
-                Row row = sheet.getRow(i);
-                if (row == null) continue;
+            // Copy header row to the output file
+            Row inputHeaderRow = inputSheet.getRow(0);
+            Row outputHeaderRow = outputSheet.createRow(0);
+            for (int i = 0; i < inputHeaderRow.getLastCellNum(); i++) {
+                Cell inputCell = inputHeaderRow.getCell(i);
+                Cell outputCell = outputHeaderRow.createCell(i);
+                if (inputCell != null) {
+                    outputCell.setCellValue(inputCell.getStringCellValue());
+                }
+            }
 
-                String billingCode = getCellValue(row.getCell(findColumnIndex(headerRow, "BIILING_CODE")));
+            // Process each row
+            int outputRowIndex = 1;
+            for (int i = 1; i <= inputSheet.getLastRowNum(); i++) {
+                Row inputRow = inputSheet.getRow(i);
+                if (inputRow == null) continue;
+
+                String billingCode = getCellValue(inputRow.getCell(findColumnIndex(inputHeaderRow, "BIILING_CODE")));
                 List<Map<String, String>> ruleSets = rules.getOrDefault(billingCode, new ArrayList<>());
 
-                // Validate row and get result
-                ValidationResult result = validateRowAgainstRules(row, headerRow, ruleSets);
+                // Validate row and add to output
+                ValidationResult result = validateRowAgainstRules(inputRow, inputHeaderRow, ruleSets);
 
-                if (result.isValid) {
-                    addRuleAsRow(sheet, headerRow, result.matchedRule);
-                } else {
-                    addRuleAsRow(sheet, headerRow, result.matchedRule);
+                // Add the original input row to the output file
+                Row outputRow = outputSheet.createRow(outputRowIndex++);
+                copyRow(inputRow, outputRow);
+
+                // Add the matched rule row if available
+                if (result.matchedRuleRow != null) {
+                    Row ruleRow = outputSheet.createRow(outputRowIndex++);
+                    populateRuleRow(ruleRow, inputHeaderRow, result.matchedRuleRow);
                 }
             }
 
             // Save the updated Excel file
             try (FileOutputStream fos = new FileOutputStream(outputFilePath)) {
-                workbook.write(fos);
+                outputWorkbook.write(fos);
             }
-        }
-    }
-
-    // Add a rule as a new row in the sheet
-    private static void addRuleAsRow(Sheet sheet, Row headerRow, Map<String, String> ruleSet) {
-        int newRowNum = sheet.getLastRowNum() + 1;
-        Row newRow = sheet.createRow(newRowNum);
-
-        for (Map.Entry<String, String> rule : ruleSet.entrySet()) {
-            int colIndex = findColumnIndex(headerRow, rule.getKey());
-            Cell cell = newRow.createCell(colIndex);
-            cell.setCellValue(rule.getValue());
         }
     }
 
     // Validation result structure
     private static class ValidationResult {
         boolean isValid;
-        Map<String, String> matchedRule;
+        Map<String, String> matchedRuleRow;
 
-        ValidationResult(boolean isValid, Map<String, String> matchedRule) {
+        ValidationResult(boolean isValid, Map<String, String> matchedRuleRow) {
             this.isValid = isValid;
-            this.matchedRule = matchedRule;
+            this.matchedRuleRow = matchedRuleRow;
         }
     }
 
     // Validate a single row against multiple rule sets
     private static ValidationResult validateRowAgainstRules(Row row, Row headerRow, List<Map<String, String>> ruleSets) {
-        Map<String, String> lastRuleCompared = null;
-
         for (Map<String, String> ruleSet : ruleSets) {
             boolean isMatch = true;
 
@@ -129,15 +132,48 @@ public class ExcelValidator {
                 }
             }
 
-            lastRuleCompared = ruleSet;
-
             if (isMatch) {
                 return new ValidationResult(true, ruleSet);
             }
         }
 
-        // If no rule matches, return the last rule compared
-        return new ValidationResult(false, lastRuleCompared);
+        // If no rule matches, include the last rule set
+        if (!ruleSets.isEmpty()) {
+            return new ValidationResult(false, ruleSets.get(ruleSets.size() - 1));
+        }
+
+        return new ValidationResult(false, null);
+    }
+
+    // Copy row from input to output
+    private static void copyRow(Row inputRow, Row outputRow) {
+        for (int i = 0; i < inputRow.getLastCellNum(); i++) {
+            Cell inputCell = inputRow.getCell(i);
+            Cell outputCell = outputRow.createCell(i);
+            if (inputCell != null) {
+                switch (inputCell.getCellType()) {
+                    case STRING:
+                        outputCell.setCellValue(inputCell.getStringCellValue());
+                        break;
+                    case NUMERIC:
+                        outputCell.setCellValue(inputCell.getNumericCellValue());
+                        break;
+                    case BOOLEAN:
+                        outputCell.setCellValue(inputCell.getBooleanCellValue());
+                        break;
+                    default:
+                        outputCell.setCellValue("");
+                }
+            }
+        }
+    }
+
+    // Populate rule row in output
+    private static void populateRuleRow(Row ruleRow, Row headerRow, Map<String, String> ruleSet) {
+        for (Map.Entry<String, String> rule : ruleSet.entrySet()) {
+            int colIndex = findColumnIndex(headerRow, rule.getKey());
+            ruleRow.createCell(colIndex).setCellValue(rule.getValue());
+        }
     }
 
     // Validate cell value based on rule
