@@ -91,4 +91,26 @@ public class ExcelCombinationCounter {
                 Cell cell2 = row.getCell(column2Index);
 
                 String value1 = cell1 != null ? cell1.toString().trim() : "";
-                String value2 = cell2 
+                String value2 = cell2 != null ? cell2.toString().trim() : "";
+
+                // Create combination string of Column1 and Column2
+                String combination = value1 + "," + value2;
+                // Count occurrences of each combination
+                combinationCountMap.put(combination, combinationCountMap.getOrDefault(combination, 0) + 1);
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return combinationCountMap;
+    }
+
+    private static int getColumnIndexByName(Row headerRow, String columnName) {
+        for (Cell cell : headerRow) {
+            if (cell.getStringCellValue().equalsIgnoreCase(columnName)) {
+                return cell.getColumnIndex();
+            }
+        }
+        return -1; // Column not found
+    }
+}
