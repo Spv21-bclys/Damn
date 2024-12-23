@@ -9,44 +9,77 @@ import java.util.Map;
 
 public class ExcelCombinationCounter {
     public static void main(String[] args) {
-        String inputFilePath = "input.xlsx"; // Replace with your input file path
-        String outputFilePath = "output.xlsx"; // Replace with your desired output file path
+        String inputFilePath1 = "file1.xlsx"; // First file path
+        String inputFilePath2 = "file2.xlsx"; // Second file path
+        String outputFilePath = "output_comparison.xlsx"; // Output file path
 
-        // Column names to search for
-        String column1Name = "Column1";
-        String column2Name = "Column2";
+        // Column names for both files
+        String column1NameFile1 = "Column1"; // Column1 name in File1
+        String column2NameFile1 = "Column2"; // Column2 name in File1
+
+        String column1NameFile2 = "Col1"; // Column1 name in File2
+        String column2NameFile2 = "Col2"; // Column2 name in File2
+
+        // Count combinations in the first file
+        Map<String, Integer> combinationCountFile1 = getCombinationCounts(inputFilePath1, column1NameFile1, column2NameFile1);
+
+        // Count combinations in the second file
+        Map<String, Integer> combinationCountFile2 = getCombinationCounts(inputFilePath2, column1NameFile2, column2NameFile2);
+
+        // Create output workbook and sheet
+        try (Workbook outputWorkbook = new XSSFWorkbook()) {
+            Sheet outputSheet = outputWorkbook.createSheet("Combination Comparison");
+
+            // Create header row for the output
+            Row headerRow = outputSheet.createRow(0);
+            headerRow.createCell(0).setCellValue("Combination");
+            headerRow.createCell(1).setCellValue("Count (File1)");
+            headerRow.createCell(2).setCellValue("Count (File2)");
+
+            // Populate data rows with combinations and counts
+            int rowIndex = 1;
+            for (Map.Entry<String, Integer> entry : combinationCountFile1.entrySet()) {
+                Row dataRow = outputSheet.createRow(rowIndex++);
+                String combination = entry.getKey();
+                Integer countFile1 = entry.getValue();
+                Integer countFile2 = combinationCountFile2.getOrDefault(combination, 0);
+
+                dataRow.createCell(0).setCellValue(combination);
+                dataRow.createCell(1).setCellValue(countFile1);
+                dataRow.createCell(2).setCellValue(countFile2);
+            }
+
+            // Save the output file
+            try (FileOutputStream fos = new FileOutputStream(new File(outputFilePath))) {
+                outputWorkbook.write(fos);
+            }
+
+            System.out.println("Combination comparison has been written to " + outputFilePath);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static Map<String, Integer> getCombinationCounts(String inputFilePath, String column1Name, String column2Name) {
+        Map<String, Integer> combinationCountMap = new HashMap<>();
 
         try (FileInputStream fis = new FileInputStream(new File(inputFilePath));
              Workbook workbook = new XSSFWorkbook(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0); // Read the first sheet
-            Map<String, Integer> combinationCountMap = new HashMap<>();
-
-            // Get the header row (first row)
             Row headerRow = sheet.getRow(0);
             if (headerRow == null) {
                 System.out.println("Header row is missing!");
-                return;
+                return combinationCountMap;
             }
 
-            // Find the column indexes based on the column names
-            int column1Index = -1;
-            int column2Index = -1;
+            // Resolve column indices from column names
+            int column1Index = getColumnIndexByName(headerRow, column1Name);
+            int column2Index = getColumnIndexByName(headerRow, column2Name);
 
-            for (int i = 0; i < headerRow.getPhysicalNumberOfCells(); i++) {
-                String headerValue = headerRow.getCell(i).toString().trim();
-                if (headerValue.equalsIgnoreCase(column1Name)) {
-                    column1Index = i;
-                }
-                if (headerValue.equalsIgnoreCase(column2Name)) {
-                    column2Index = i;
-                }
-            }
-
-            // If any of the columns are missing
             if (column1Index == -1 || column2Index == -1) {
-                System.out.println("One or both columns are missing in the header.");
-                return;
+                System.out.println("One or both column names not found!");
+                return combinationCountMap;
             }
 
             // Loop through rows and count combinations of Column1 and Column2
@@ -58,39 +91,4 @@ public class ExcelCombinationCounter {
                 Cell cell2 = row.getCell(column2Index);
 
                 String value1 = cell1 != null ? cell1.toString().trim() : "";
-                String value2 = cell2 != null ? cell2.toString().trim() : "";
-
-                // Create combination string of Column1 and Column2
-                String combination = value1 + "," + value2;
-                // Count occurrences of each combination
-                combinationCountMap.put(combination, combinationCountMap.getOrDefault(combination, 0) + 1);
-            }
-
-            // Write the results to a new Excel file
-            Workbook outputWorkbook = new XSSFWorkbook();
-            Sheet outputSheet = outputWorkbook.createSheet("Combinations");
-
-            // Create header row for the output
-            Row headerRowOutput = outputSheet.createRow(0);
-            headerRowOutput.createCell(0).setCellValue("Combination");
-            headerRowOutput.createCell(1).setCellValue("Count");
-
-            // Populate data rows with combinations and counts
-            int rowIndex = 1;
-            for (Map.Entry<String, Integer> entry : combinationCountMap.entrySet()) {
-                Row dataRow = outputSheet.createRow(rowIndex++);
-                dataRow.createCell(0).setCellValue(entry.getKey());
-                dataRow.createCell(1).setCellValue(entry.getValue());
-            }
-
-            // Save the output file
-            try (FileOutputStream fos = new FileOutputStream(new File(outputFilePath))) {
-                outputWorkbook.write(fos);
-            }
-
-            System.out.println("Combination counts have been written to " + outputFilePath);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-}
+                String value2 = cell2 
