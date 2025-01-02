@@ -7,15 +7,21 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class MergeExcelByColumnName {
+    
     public static void main(String[] args) {
+        // Call the function to add PriorityOrder to the first Excel file
+        addPriorityOrderToExcel("path_to_first_excel.xlsx", "path_to_second_excel.xlsx");
+    }
+
+    public static void addPriorityOrderToExcel(String firstExcelFilePath, String secondExcelFilePath) {
         try {
             // Load the first Excel file
-            FileInputStream file1 = new FileInputStream("path_to_first_excel.xlsx");
+            FileInputStream file1 = new FileInputStream(firstExcelFilePath);
             Workbook workbook1 = new XSSFWorkbook(file1);
             Sheet sheet1 = workbook1.getSheetAt(0);
 
             // Load the second Excel file
-            FileInputStream file2 = new FileInputStream("path_to_second_excel.xlsx");
+            FileInputStream file2 = new FileInputStream(secondExcelFilePath);
             Workbook workbook2 = new XSSFWorkbook(file2);
             Sheet sheet2 = workbook2.getSheetAt(0);
 
@@ -78,7 +84,7 @@ public class MergeExcelByColumnName {
             }
 
             // Save the changes directly to the first file
-            FileOutputStream output = new FileOutputStream("path_to_first_excel.xlsx");
+            FileOutputStream output = new FileOutputStream(firstExcelFilePath);
             workbook1.write(output);
             output.close();
 
