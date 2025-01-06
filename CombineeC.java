@@ -1,5 +1,4 @@
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.FileInputStream;
@@ -8,128 +7,143 @@ import java.io.IOException;
 import java.util.*;
 
 public class ExcelMerger {
-    public static void main(String[] args) throws IOException {
-        // Input file paths
-        String file1 = "file1.xlsx";
-        String file2 = "file2.xlsx";
-        String file3 = "file3.xlsx";
+    public static void main(String[] args) {
+        String file1Path = "excel1.xlsx"; // Replace with your file path
+        String file2Path = "excel2.xlsx"; // Replace with your file path
+        String outputFilePath = "merged_output.xlsx";
 
-        // Output file path
-        String outputFile = "combined_output.xlsx";
+        try {
+            // Read both Excel files
+            Workbook workbook1 = new XSSFWorkbook(new FileInputStream(file1Path));
+            Workbook workbook2 = new XSSFWorkbook(new FileInputStream(file2Path));
 
-        // Column names to extract
-        String commonColumn = "C";
-        String columnFromFile1 = "Column1_from_file1"; // Specific column from file1
-        List<String> columnsFromFile2 = Arrays.asList("ColumnA", "ColumnB", "ColumnC", "Additional1", "Additional2", "Additional3");
-        List<String> columnsFromFile3 = Arrays.asList("ColumnA", "ColumnB", "ColumnC", "UniqueTo3");
+            // Combine the sheets into a single workbook
+            Workbook mergedWorkbook = mergeExcelFiles(workbook1, workbook2);
 
-        // Load data from Excel files
-        Map<String, List<String>> data1 = loadExcelData(file1, 0, commonColumn, Collections.singletonList(columnFromFile1));
-        Map<String, List<String>> data2 = loadExcelData(file2, 0, commonColumn, columnsFromFile2);
-        Map<String, List<String>> data3 = loadExcelData(file3, 0, commonColumn, columnsFromFile3);
+            // Write the merged workbook to a new file
+            FileOutputStream outputStream = new FileOutputStream(outputFilePath);
+            mergedWorkbook.write(outputStream);
 
-        // Combine data
-        Map<String, List<String>> combinedData = new LinkedHashMap<>();
-        Set<String> allKeys = new HashSet<>();
-        allKeys.addAll(data1.keySet());
-        allKeys.addAll(data2.keySet());
-        allKeys.addAll(data3.keySet());
-
-        for (String key : allKeys) {
-            List<String> combinedRow = new ArrayList<>();
-            combinedRow.add(key); // Add common column
-            combinedRow.addAll(data1.getOrDefault(key, Arrays.asList("", ""))); // Add data from file1
-            combinedRow.addAll(data2.getOrDefault(key, new ArrayList<>(Collections.nCopies(columnsFromFile2.size(), "")))); // Add data from file2
-            combinedRow.addAll(data3.getOrDefault(key, new ArrayList<>(Collections.nCopies(columnsFromFile3.size(), "")))); // Add data from file3
-            combinedData.put(key, combinedRow);
+            outputStream.close();
+            System.out.println("Merged file created: " + outputFilePath);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-
-        // Write combined data to output file
-        writeCombinedDataToExcel(outputFile, combinedData, columnFromFile1, columnsFromFile2, columnsFromFile3);
-        System.out.println("Combined Excel file saved as " + outputFile);
     }
 
-    private static Map<String, List<String>> loadExcelData(String filePath, int sheetIndex, String commonColumn, List<String> specificColumns) throws IOException {
-        Map<String, List<String>> data = new LinkedHashMap<>();
+    public static Workbook mergeExcelFiles(Workbook workbook1, Workbook workbook2) {
+        Workbook mergedWorkbook = new XSSFWorkbook();
+        Sheet sheet1 = workbook1.getSheetAt(0);
+        Sheet sheet2 = workbook2.getSheetAt(0);
 
-        try (FileInputStream fis = new FileInputStream(filePath);
-             Workbook workbook = new XSSFWorkbook(fis)) {
+        // Create a new sheet in the merged workbook
+        Sheet mergedSheet = mergedWorkbook.createSheet("MergedSheet");
 
-            Sheet sheet = workbook.getSheetAt(sheetIndex);
-            Row headerRow = sheet.getRow(0);
+        // Map to store unique headers
+        LinkedHashMap<String, Integer> headers = new LinkedHashMap<>();
 
-            // Map column names to their indexes
-            Map<String, Integer> columnIndexes = new HashMap<>();
-            for (Cell cell : headerRow) {
-                columnIndexes.put(cell.getStringCellValue(), cell.getColumnIndex());
-            }
+        // Helper to track the current row
+        int currentRow = 0;
 
-            if (!columnIndexes.containsKey(commonColumn)) {
-                throw new IllegalArgumentException("Common column '" + commonColumn + "' not found in " + filePath);
-            }
+        // Add headers and data from the first sheet
+        currentRow = copyHeadersAndData(sheet1, mergedSheet, headers, currentRow);
 
-            List<Integer> selectedIndexes = new ArrayList<>();
-            selectedIndexes.add(columnIndexes.get(commonColumn)); // Always include the common column
+        // Add headers and data from the second sheet (excluding a specific column)
+        currentRow = copyHeadersAndDataExcludingColumn(sheet2, mergedSheet, headers, currentRow, "ColumnToExclude");
 
-            for (String column : specificColumns) {
-                if (columnIndexes.containsKey(column)) {
-                    selectedIndexes.add(columnIndexes.get(column));
-                } else {
-                    System.out.println("Warning: Column '" + column + "' not found in " + filePath);
-                }
-            }
+        return mergedWorkbook;
+    }
 
-            // Read data rows
-            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
-                Row row = sheet.getRow(i);
-                if (row != null) {
-                    String key = row.getCell(columnIndexes.get(commonColumn)).toString();
-                    List<String> rowData = new ArrayList<>();
-                    for (int index : selectedIndexes) {
-                        Cell cell = row.getCell(index);
-                        rowData.add(cell != null ? cell.toString() : "");
-                    }
-                    data.put(key, rowData);
-                }
+    public static int copyHeadersAndData(Sheet sourceSheet, Sheet targetSheet,
+                                         LinkedHashMap<String, Integer> headers, int currentRow) {
+        int lastColumn = sourceSheet.getRow(0).getLastCellNum();
+
+        // Add headers if they are new
+        Row headerRow = targetSheet.getRow(0) == null ? targetSheet.createRow(0) : targetSheet.getRow(0);
+        for (int i = 0; i < lastColumn; i++) {
+            Cell cell = sourceSheet.getRow(0).getCell(i);
+            String header = cell.getStringCellValue();
+
+            if (!headers.containsKey(header)) {
+                headers.put(header, headers.size());
+                headerRow.createCell(headers.get(header)).setCellValue(header);
             }
         }
 
-        return data;
-    }
+        // Add data
+        for (int i = 1; i <= sourceSheet.getLastRowNum(); i++) {
+            Row sourceRow = sourceSheet.getRow(i);
+            Row targetRow = targetSheet.getRow(currentRow) == null ? targetSheet.createRow(currentRow) : targetSheet.getRow(currentRow);
 
-    private static void writeCombinedDataToExcel(String filePath, Map<String, List<String>> data, String columnFromFile1, List<String> columnsFromFile2, List<String> columnsFromFile3) throws IOException {
-        try (XSSFWorkbook workbook = new XSSFWorkbook();
-             FileOutputStream fos = new FileOutputStream(filePath)) {
+            for (int j = 0; j < lastColumn; j++) {
+                Cell sourceCell = sourceRow.getCell(j);
+                if (sourceCell != null) {
+                    String header = sourceSheet.getRow(0).getCell(j).getStringCellValue();
+                    int columnIndex = headers.get(header);
 
-            XSSFSheet sheet = workbook.createSheet("Combined Data");
-
-            // Write header
-            Row headerRow = sheet.createRow(0);
-            int colIndex = 0;
-            headerRow.createCell(colIndex++).setCellValue("Common_Column");
-            headerRow.createCell(colIndex++).setCellValue(columnFromFile1);
-            for (String col : columnsFromFile2) {
-                headerRow.createCell(colIndex++).setCellValue(col);
-            }
-            for (String col : columnsFromFile3) {
-                headerRow.createCell(colIndex++).setCellValue(col);
-            }
-
-            // Write data rows
-            int rowIndex = 1;
-            for (List<String> rowData : data.values()) {
-                Row row = sheet.createRow(rowIndex++);
-                for (int cellIndex = 0; cellIndex < rowData.size(); cellIndex++) {
-                    row.createCell(cellIndex).setCellValue(rowData.get(cellIndex));
+                    Cell targetCell = targetRow.createCell(columnIndex);
+                    copyCellValue(sourceCell, targetCell);
                 }
             }
+            currentRow++;
+        }
+        return currentRow;
+    }
 
-            // Autosize columns
-            for (int col = 0; col < headerRow.getLastCellNum(); col++) {
-                sheet.autoSizeColumn(col);
+    public static int copyHeadersAndDataExcludingColumn(Sheet sourceSheet, Sheet targetSheet,
+                                                        LinkedHashMap<String, Integer> headers, int currentRow, String columnToExclude) {
+        int lastColumn = sourceSheet.getRow(0).getLastCellNum();
+
+        // Add headers and skip the excluded column
+        Row headerRow = targetSheet.getRow(0) == null ? targetSheet.createRow(0) : targetSheet.getRow(0);
+        for (int i = 0; i < lastColumn; i++) {
+            Cell cell = sourceSheet.getRow(0).getCell(i);
+            String header = cell.getStringCellValue();
+
+            // Skip the excluded column
+            if (!header.equals(columnToExclude) && !headers.containsKey(header)) {
+                headers.put(header, headers.size());
+                headerRow.createCell(headers.get(header)).setCellValue(header);
             }
+        }
 
-            workbook.write(fos);
+        // Add data, skipping the excluded column
+        for (int i = 1; i <= sourceSheet.getLastRowNum(); i++) {
+            Row sourceRow = sourceSheet.getRow(i);
+            Row targetRow = targetSheet.getRow(currentRow) == null ? targetSheet.createRow(currentRow) : targetSheet.getRow(currentRow);
+
+            for (int j = 0; j < lastColumn; j++) {
+                Cell sourceCell = sourceRow.getCell(j);
+                String header = sourceSheet.getRow(0).getCell(j).getStringCellValue();
+
+                // Skip the excluded column
+                if (sourceCell != null && !header.equals(columnToExclude)) {
+                    int columnIndex = headers.get(header);
+                    Cell targetCell = targetRow.createCell(columnIndex);
+                    copyCellValue(sourceCell, targetCell);
+                }
+            }
+            currentRow++;
+        }
+        return currentRow;
+    }
+
+    public static void copyCellValue(Cell sourceCell, Cell targetCell) {
+        switch (sourceCell.getCellType()) {
+            case STRING:
+                targetCell.setCellValue(sourceCell.getStringCellValue());
+                break;
+            case NUMERIC:
+                targetCell.setCellValue(sourceCell.getNumericCellValue());
+                break;
+            case BOOLEAN:
+                targetCell.setCellValue(sourceCell.getBooleanCellValue());
+                break;
+            case FORMULA:
+                targetCell.setCellFormula(sourceCell.getCellFormula());
+                break;
+            default:
+                targetCell.setBlank();
         }
     }
 }
