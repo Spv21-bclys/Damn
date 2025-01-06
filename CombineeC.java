@@ -2,24 +2,31 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.*;
 
 public class ExcelMerger {
+    public static void main(String[] args) throws IOException {
+        // Input file paths
+        String file1 = "file1.xlsx";
+        String file2 = "file2.xlsx";
+        String file3 = "file3.xlsx";
 
-    public static ByteArrayOutputStream mergeExcelFiles(ByteArrayOutputStream baos1, ByteArrayOutputStream baos2, ByteArrayOutputStream baos3) throws IOException {
-        // Define column names and configuration
-        String commonColumn = "C"; // Shared column
+        // Output file path
+        String outputFile = "combined_output.xlsx";
+
+        // Column names to extract
+        String commonColumn = "C";
         String columnFromFile1 = "Column1_from_file1"; // Specific column from file1
-        List<String> columnsFromFile2 = Arrays.asList("ColumnA", "ColumnB", "Additional1", "Additional2", "Additional3");
-        List<String> columnsFromFile3 = Arrays.asList("ColumnA", "ColumnB", "UniqueTo3");
+        List<String> columnsFromFile2 = Arrays.asList("ColumnA", "ColumnB", "ColumnC", "Additional1", "Additional2", "Additional3");
+        List<String> columnsFromFile3 = Arrays.asList("ColumnA", "ColumnB", "ColumnC", "UniqueTo3");
 
-        // Load data from ByteArrayOutputStream
-        Map<String, List<String>> data1 = loadExcelData(baos1, commonColumn, Collections.singletonList(columnFromFile1));
-        Map<String, List<String>> data2 = loadExcelData(baos2, commonColumn, columnsFromFile2);
-        Map<String, List<String>> data3 = loadExcelData(baos3, commonColumn, columnsFromFile3);
+        // Load data from Excel files
+        Map<String, List<String>> data1 = loadExcelData(file1, 0, commonColumn, Collections.singletonList(columnFromFile1));
+        Map<String, List<String>> data2 = loadExcelData(file2, 0, commonColumn, columnsFromFile2);
+        Map<String, List<String>> data3 = loadExcelData(file3, 0, commonColumn, columnsFromFile3);
 
         // Combine data
         Map<String, List<String>> combinedData = new LinkedHashMap<>();
@@ -37,17 +44,18 @@ public class ExcelMerger {
             combinedData.put(key, combinedRow);
         }
 
-        // Write combined data to ByteArrayOutputStream
-        return writeCombinedDataToByteArray(combinedData, columnFromFile1, columnsFromFile2, columnsFromFile3);
+        // Write combined data to output file
+        writeCombinedDataToExcel(outputFile, combinedData, columnFromFile1, columnsFromFile2, columnsFromFile3);
+        System.out.println("Combined Excel file saved as " + outputFile);
     }
 
-    private static Map<String, List<String>> loadExcelData(ByteArrayOutputStream baos, String commonColumn, List<String> specificColumns) throws IOException {
+    private static Map<String, List<String>> loadExcelData(String filePath, int sheetIndex, String commonColumn, List<String> specificColumns) throws IOException {
         Map<String, List<String>> data = new LinkedHashMap<>();
 
-        try (ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
-             Workbook workbook = new XSSFWorkbook(bais)) {
+        try (FileInputStream fis = new FileInputStream(filePath);
+             Workbook workbook = new XSSFWorkbook(fis)) {
 
-            Sheet sheet = workbook.getSheetAt(0);
+            Sheet sheet = workbook.getSheetAt(sheetIndex);
             Row headerRow = sheet.getRow(0);
 
             // Map column names to their indexes
@@ -57,7 +65,7 @@ public class ExcelMerger {
             }
 
             if (!columnIndexes.containsKey(commonColumn)) {
-                throw new IllegalArgumentException("Common column '" + commonColumn + "' not found in input data.");
+                throw new IllegalArgumentException("Common column '" + commonColumn + "' not found in " + filePath);
             }
 
             List<Integer> selectedIndexes = new ArrayList<>();
@@ -67,7 +75,7 @@ public class ExcelMerger {
                 if (columnIndexes.containsKey(column)) {
                     selectedIndexes.add(columnIndexes.get(column));
                 } else {
-                    System.out.println("Warning: Column '" + column + "' not found in input data.");
+                    System.out.println("Warning: Column '" + column + "' not found in " + filePath);
                 }
             }
 
@@ -89,13 +97,10 @@ public class ExcelMerger {
         return data;
     }
 
-    private static ByteArrayOutputStream writeCombinedDataToByteArray(
-            Map<String, List<String>> data,
-            String columnFromFile1,
-            List<String> columnsFromFile2,
-            List<String> columnsFromFile3) throws IOException {
+    private static void writeCombinedDataToExcel(String filePath, Map<String, List<String>> data, String columnFromFile1, List<String> columnsFromFile2, List<String> columnsFromFile3) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+             FileOutputStream fos = new FileOutputStream(filePath)) {
 
-        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
             XSSFSheet sheet = workbook.createSheet("Combined Data");
 
             // Write header
@@ -124,10 +129,7 @@ public class ExcelMerger {
                 sheet.autoSizeColumn(col);
             }
 
-            // Write to ByteArrayOutputStream
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            workbook.write(baos);
-            return baos;
+            workbook.write(fos);
         }
     }
 }
